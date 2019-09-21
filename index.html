@@ -1,16 +1,32 @@
 <html>
 <head>
   <title>L'autre main</title>
+  <style type="text/css">
+
+  html, body {
+      overflow: hidden;
+  }
+
+  body {
+      margin: 0;
+      padding: 0;
+      background-color: ivory;
+  }
+
+  #main {
+      position: absolute;
+  }
+
+  </style>
 </head>
 <body>
-  <canvas id='main' width='420' height='420'>
+  <canvas id='main'></canvas>
   <script>
   var canvas, context, hist, lastDrawn;
   var score = 0;
   var t = 0;
 
-  var or = 175;
-  var ir = 76.5 / 200 * or;
+  var or, ir;
 
   var drawing = false;
   hist = [];
@@ -35,8 +51,13 @@
 
   function getMousePos(canvas, evt) {
     var rect = canvas.getBoundingClientRect();
-    return new Point(evt.clientX - rect.left,
-                     evt.clientY - rect.top);
+    if(evt.clientX != null) {
+      return new Point(evt.clientX - rect.left,
+                       evt.clientY - rect.top);
+    } else {
+      return new Point(evt.touches[0].clientX - rect.left,
+                       evt.touches[0].clientY - rect.top);
+    }
   }
 
   function getStarCoords(npoints, innerRadius, outerRadius, deg0) {
@@ -80,21 +101,35 @@
   function init() {
       canvas = document.querySelector('#main');
       context = canvas.getContext( '2d' );
-      canvas.addEventListener('mousedown', function(evt) {
+      var fun = function(evt) {
 		    drawing = true;
         lastDrawn = 0;
         hist = [getMousePos(canvas, evt)];
         t0 = new Date();
-      });
+      }
+      canvas.addEventListener('mousedown', fun);
+      canvas.addEventListener('touchstart', fun);
 
-      canvas.addEventListener('mousemove', function(evt) {
+      fun = function(evt) {
         hist.push(getMousePos(canvas, evt));
-      });
+      };
+      canvas.addEventListener('mousemove', fun);
+      canvas.addEventListener('touchmove', fun);
 
-    	canvas.addEventListener('mouseup', function(evt) {
+      fun = function(evt) {
         drawing = false;
         rescore();
-      });
+      };
+
+    	canvas.addEventListener('mouseup', fun);
+      canvas.addEventListener('touchend', fun);
+
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      or = Math.min(canvas.width, canvas.height) / 2 / 1.5;
+      ir = 76.5 / 200 * or;
+
   }
 
   function animate() {
@@ -124,10 +159,14 @@
           context.strokeStyle = 'rgb(255,0,0)';
           context.beginPath();
           context.moveTo(hist[lastDrawn].x, hist[lastDrawn].y);
-          for(var i = lastDrawn + 1; i < hist.length - 1; i++) {
+          var drawn = 0;
+          for(var i = lastDrawn + 1; i < hist.length; i++) {
             context.lineTo(hist[i].x, hist[i].y);
+            drawn++;
           }
+          console.log(drawn);
           context.stroke();
+          lastDrawn = hist.length - 2;
         }
       }
   }
@@ -160,8 +199,6 @@
     var dist2 = upCoords.map(
       (a) => Math.min(...(hist.map((b) => b.sub(a).norm2())))
     );
-
-    console.log(dist2);
 
     var mse = Math.sqrt(dist2.reduce((a, b) => a + b) / dist2.length);
     score = Math.max(Math.round(100 - 3 * mse), 0);
