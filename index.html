@@ -1,0 +1,174 @@
+<html>
+<head>
+  <title>L'autre main</title>
+</head>
+<body>
+  <canvas id='main' width='420' height='420'>
+  <script>
+  var canvas, context, hist, lastDrawn;
+  var score = 0;
+  var t = 0;
+
+  var or = 175;
+  var ir = 76.5 / 200 * or;
+
+  var drawing = false;
+  hist = [];
+
+  class Point {
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
+    }
+
+    sub(a) {
+      return new Point(this.x - a.x, this.y - a.y);
+    }
+
+    norm2() {
+      return this.x * this.x + this.y * this.y;
+    }
+  }
+
+  init();
+  animate();
+
+  function getMousePos(canvas, evt) {
+    var rect = canvas.getBoundingClientRect();
+    return new Point(evt.clientX - rect.left,
+                     evt.clientY - rect.top);
+  }
+
+  function getStarCoords(npoints, innerRadius, outerRadius, deg0) {
+    var deltaPer = Math.PI * 2 / npoints;
+    var delta0 = deg0 / 180.0 * Math.PI;
+    coords = [];
+    for(var i = 0; i < npoints; i++) {
+      xl = outerRadius * Math.cos(deltaPer * i + delta0);
+      yl = outerRadius * Math.sin(deltaPer * i + delta0);
+      xr = innerRadius * Math.cos(deltaPer * (i + .5) + delta0);
+      yr = innerRadius * Math.sin(deltaPer * (i + .5) + delta0);
+      coords.push(new Point(xl, yl));
+      coords.push(new Point(xr, yr));
+    }
+    return coords
+  }
+
+  function drawStar() {
+    var w = 1.2;
+
+    coordsi = getStarCoords(5, ir * w, or * w, -90);
+    coordso = getStarCoords(5, ir / w, or / w, -90);
+
+    shapes = [coordsi, coordso];
+
+    context.save();
+    context.beginPath();
+    context.strokeStyle = '#000000';
+    context.translate(canvas.width / 2, canvas.height / 2);
+    for(var shape of shapes) {
+      context.moveTo(shape[0].x, shape[0].y);
+      for(var i = 1; i < shape.length; i++) {
+        context.lineTo(shape[i].x, shape[i].y);
+      }
+      context.lineTo(shape[0].x, shape[0].y);
+      context.stroke();
+    }
+    context.restore();
+  }
+
+  function init() {
+      canvas = document.querySelector('#main');
+      context = canvas.getContext( '2d' );
+      canvas.addEventListener('mousedown', function(evt) {
+		    drawing = true;
+        lastDrawn = 0;
+        hist = [getMousePos(canvas, evt)];
+        t0 = new Date();
+      });
+
+      canvas.addEventListener('mousemove', function(evt) {
+        hist.push(getMousePos(canvas, evt));
+      });
+
+    	canvas.addEventListener('mouseup', function(evt) {
+        drawing = false;
+        rescore();
+      });
+  }
+
+  function animate() {
+      requestAnimationFrame( animate );
+      draw();
+  }
+
+  function draw() {
+    	if(!drawing) {
+        context.fillStyle = 'rgb(255,255,255)';
+        context.fillRect( 0, 0, canvas.width, canvas.height);
+        drawStar();
+        context.fillStyle = '#000000';
+        context.font = '24px Arial';
+        context.fillText("Accuracy: " + score, canvas.width - 150, 24);
+        context.fillText(Math.round(t*10)/10 + "s", canvas.width - 50, canvas.height - 50);
+      } else {
+        //
+        //context.beginPath();
+        //context.arc( x, y, 10, 0, Math.PI * 2, true );
+        //context.closePath();
+        //context.fill();
+
+        // Only draw what's necessary.
+        if(lastDrawn < hist.length - 1) {
+          // Draw the lines that need drawing.
+          context.strokeStyle = 'rgb(255,0,0)';
+          context.beginPath();
+          context.moveTo(hist[lastDrawn].x, hist[lastDrawn].y);
+          for(var i = lastDrawn + 1; i < hist.length - 1; i++) {
+            context.lineTo(hist[i].x, hist[i].y);
+          }
+          context.stroke();
+        }
+      }
+  }
+
+  function upscale(coords, factor) {
+    outCoords = [];
+    for(var i = 0; i < coords.length; i++) {
+      var e = (i + 1) % coords.length;
+      for(var j = 0; j < 1; j += 1/factor) {
+        outCoords.push(
+          new Point(coords[i].x + (coords[e].x - coords[i].x) * j,
+                    coords[i].y + (coords[e].y - coords[i].y) * j)
+        );
+      }
+    }
+    return outCoords;
+  }
+
+  function rescore() {
+    var coords = getStarCoords(5, ir, or, -90);
+
+    hist = hist.map((a) => new Point(a.x - canvas.width/2, a.y - canvas.height / 2));
+
+    // Upscale the coordinates by interpolation.
+    var upCoords = upscale(coords, 10);
+
+    // Find the minimum distances between the reference between upCoords and
+    // the reference star,
+    // This is a silly O(N^2) method - the KDTree version would be O(N log N)
+    var dist2 = upCoords.map(
+      (a) => Math.min(...(hist.map((b) => b.sub(a).norm2())))
+    );
+
+    console.log(dist2);
+
+    var mse = Math.sqrt(dist2.reduce((a, b) => a + b) / dist2.length);
+    score = Math.max(Math.round(100 - 3 * mse), 0);
+    t = ((new Date()) - t0) / 1000;
+  }
+
+
+  </script>
+</body>
+</html>
